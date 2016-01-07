@@ -6,6 +6,9 @@
 #include FT_FREETYPE_H
 
 #include <string>
+#include <locale>
+#include <codecvt>
+
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -115,14 +118,18 @@ int main(int argc, char*argv[])
 
 	//TODO Compute neccessary window size based on font
 
-	FT_Set_Pixel_Sizes(face, 100.0, 0.0);
+	FT_Set_Pixel_Sizes(face, 150.0, 0.0);
 	const FT_GlyphSlot glyph = face->glyph;
-	FT_Load_Char(face, 'M', FT_LOAD_RENDER);
+	//FT_Load_Char(face, 'M', FT_LOAD_RENDER);
 
 	// assuming monospace font, 14 charaters per line and a one character wide border around the atlas
-	unsigned int character_width = (glyph->advance.x >> 6);
+	unsigned int character_width = (face->size->metrics.max_advance >> 6);
+	//unsigned int character_width = 100;
+	unsigned int character_height = (face->size->metrics.height >> 6);;
 	unsigned int window_width = (16 * character_width);
-	unsigned int window_height = (8 * 2.0 * character_width);
+	unsigned int window_height = (6 * character_height);
+
+	unsigned int character_max_y = (face->size->metrics.ascender >> 6);
 
 	/////////////////////////////////////
 	// Window and OpenGL Context creation
@@ -199,14 +206,25 @@ int main(int argc, char*argv[])
 	// Render font atlas to fbo
 	//////////////////////////////////////////////////////
 
-	std::vector<std::string> atlas_rows;
+	//	std::vector<std::string> atlas_rows;
+	//	
+	//	atlas_rows.push_back("ABCDEFGHIJKLMN");
+	//	atlas_rows.push_back("OPQRSTUVWXYZab");
+	//	atlas_rows.push_back("cdefghijklmnop");
+	//	atlas_rows.push_back("qrstuvwxyz1234");
+	//	atlas_rows.push_back("567890&@.,?!'\"");
+	//	atlas_rows.push_back("\"()*-_ßöäü");
 
-	atlas_rows.push_back("ABCDEFGHIJKLMN");
-	atlas_rows.push_back("OPQRSTUVWXYZab");
-	atlas_rows.push_back("cdefghijklmnop");
-	atlas_rows.push_back("qrstuvwxyz1234");
-	atlas_rows.push_back("567890&@.,?!'\"");
-	atlas_rows.push_back("\"()*����");
+	// Using u16string, hoping to gain support for umlauts
+	std::vector<std::u16string> u16_atlas_rows;
+	std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> utf16conv;
+
+	u16_atlas_rows.push_back(utf16conv.from_bytes( "ABCDEFGHIJKLMN" ));
+	u16_atlas_rows.push_back(utf16conv.from_bytes( "OPQRSTUVWXYZab" ));
+	u16_atlas_rows.push_back(utf16conv.from_bytes( "cdefghijklmnop" ));
+	u16_atlas_rows.push_back(utf16conv.from_bytes( "qrstuvwxyz1234" ));
+	u16_atlas_rows.push_back(utf16conv.from_bytes( "567890&@.,?!'\"" ));
+	u16_atlas_rows.push_back(utf16conv.from_bytes( "\"()*-_ßöäüÖÄÜ" ));
 
 	//TOOD Bind fbo and stuff
 	atlas_fbo->bind();
@@ -225,8 +243,10 @@ int main(int argc, char*argv[])
 	float sy = 2.0/(float)window_height;
 
 	// start point
-	float x = -1.0 + character_width*sx;
-	float y = 1.0 - 2.0*character_width*sy;
+	float x = -1.0 - (face->bbox.xMin >> 6)*sx + character_width*sx;
+	float y = 1.0 - character_max_y*sy;
+
+	std::cout<<"xMin: "<<(face->bbox.xMin >> 6)<<std::endl;
 
 	//FT_Set_Pixel_Sizes(face, 900.0/14.0, 0.0);
 
@@ -234,7 +254,7 @@ int main(int argc, char*argv[])
 
 	 glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
 
-	for(auto& row : atlas_rows)
+	for(auto& row : u16_atlas_rows)
 	{
 		for(auto c : row)
 		{
@@ -270,12 +290,11 @@ int main(int argc, char*argv[])
 			glyph_mesh.draw();
 
 			x += character_width * sx;
-			y += (glyph->advance.y >> 6) * sy;
 		}
 
 		//TODO shift row position
-		x = -1.0 + character_width*sx;
-		y -= 2.0*character_width*sy;
+		x = -1.0 - (face->bbox.xMin >> 6)*sx + character_width*sx;;
+		y -= 1.0 * character_height*sy;
 	}
 
 	 glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
